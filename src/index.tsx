@@ -1,12 +1,15 @@
-import React, { useState } from 'react'
-import { Animated, FlatList, Platform, SafeAreaView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native'
-import Modal from 'react-native-modal'
+import React, { useEffect, useState } from 'react'
+import { Animated, FlatList, Platform, SafeAreaView, Text, TextInput, TouchableOpacity, View } from 'react-native'
 import DateTimePicker, { Event } from '@react-native-community/datetimepicker'
-import { format } from 'date-fns'
-import  { MaterialIcons } from '@expo/vector-icons'
 import { RectButton, Swipeable } from 'react-native-gesture-handler'
+import  { MaterialIcons } from '@expo/vector-icons'
+import Modal from 'react-native-modal'
+import { format } from 'date-fns'
+
+import { AddTask, ConcludedTask, LoadTasks, RemoveTask } from './storage'
 
 import colors from './colors'
+import styles from './styles'
 
 interface Todo {
     key: string
@@ -28,18 +31,21 @@ export default function App() {
         setTodo(value)
     }
 
-    const handleAddTodo = () => {
-        setCount(oldCount => oldCount + 1)
-
+    const handleAddTodo = async () => {
         if (todo){
-            setTodoList([...todoList, {
+            setCount(oldCout => oldCout + 1)
+            await AddTask({
                 key: String(count),
                 name: todo,
                 date: selectedDate,
-                done: false}
-            ])
+                done: false
+            })
+
+            const teste = await LoadTasks()
+
+            setTodoList([...teste])
+
         }
-        console.log(todoList)
         setTodo('')
         setModalVisible(!modalVisible)
     }
@@ -58,17 +64,20 @@ export default function App() {
         setShowDate(oldState => !oldState)
     }
 
-    const handleConcludedTodo = async (key: string) => {
+    const handleConcludedTodo = async (todo: Todo) => {
+        await ConcludedTask(todo.key)
+
         todoList.map(item => {
-            if (item.key == key)
+            if (item.key == todo.key)
                 item.done = !item.done;
         });
 
         setTodoList([...todoList])
     }
 
-    const handleRemoveTodo = (key: string) => {
-        setTodoList((list) => list.filter((item) => item.key !== key))
+    const handleRemoveTodo = async (todo: Todo) => {
+        setTodoList((list) => list.filter((item) => item.key !== todo.key))
+        await RemoveTask(todo)
     }
 
     const _renderItem = (item: Todo) => {
@@ -78,7 +87,7 @@ export default function App() {
                 renderLeftActions={() => (
                     <Animated.View style={styles.removeButton}>
                         <RectButton
-                            onPress={() => handleRemoveTodo(item.key)}
+                            onPress={() => handleRemoveTodo(item)}
                             style={{alignItems: "center", width: 40, justifyContent: 'center', }}
                         >
                             <MaterialIcons name="delete-outline" color={colors.white} size={25}/>
@@ -88,20 +97,30 @@ export default function App() {
             >
                 <View style={styles.containerTodo}>
                     <TouchableOpacity 
-                        onPress={() => handleConcludedTodo(item.key)}
+                        onPress={() => handleConcludedTodo(item)}
                         style={[styles.checkbox,
-                            item.done && styles.checkbox2
+                            item.done && styles.checkboxAfter
                         ]}>
                         {
                             item.done && <MaterialIcons name="done" size={17} color={colors.white}/>
                         }
                     </TouchableOpacity>
 
-                    <Text style={[styles.todo, item.done && styles.todo2]}>{item.name}</Text>
+                    <Text style={[styles.todo, item.done && styles.todoAfter]}>{item.name}</Text>
                 </View>
             </Swipeable>
         )
     }
+
+    useEffect(() => {
+        async function load() {
+            const taskStorage = await LoadTasks()
+            setTodoList(taskStorage)
+        }
+        load()
+
+    },[])
+
     return (
         <SafeAreaView style={styles.container}>
             <View style={styles.main}>
@@ -114,12 +133,12 @@ export default function App() {
                 />
                 
                 <TouchableOpacity 
-                    style={styles.button}
+                    style={styles.buttonAdd}
                     onPress={() => setModalVisible(!modalVisible)}
                 >
                     <MaterialIcons
-                        name="add-circle"
-                        color={colors.green}
+                        name="add"
+                        color={colors.white}
                         size={60}
                     />
                 </TouchableOpacity>
@@ -149,20 +168,20 @@ export default function App() {
                     }
                     {
                         Platform.OS === 'android' && (
-                            <TouchableOpacity style={styles.viewDate}
+                            <TouchableOpacity 
                                 onPress={handleOpenDateTime}
                             >   
-                                <View >
+                                <View style={styles.viewDate}>
                                     {/* mudar isso aqui */}
                                     <Text style={styles.textDate}>
-                                        {`Data ${format(selectedDate, ' dd | MM ')}`}
+                                        {`${format(selectedDate, ' dd     MM     yyyy')}`}
                                     </Text>
                                 </View>
                             </TouchableOpacity>
                             
                         )
                     }
-                    <TouchableOpacity style={styles.button1}
+                    <TouchableOpacity style={styles.button}
                         onPress={handleAddTodo}
                     >
                         <Text style={styles.textButton}>Corfirmar</Text>
@@ -173,116 +192,3 @@ export default function App() {
     );
 }
 
-const styles = StyleSheet.create({
-    container: {
-        flex: 1,
-    },
-    main: {
-        flex: 1,
-        paddingHorizontal: 20,
-        paddingTop: 10
-    },
-    title: {
-        fontSize: 28,
-        color: colors.title,
-        marginVertical: 30,
-        marginHorizontal: 10
-    },
-    containerTodo: {
-        flexDirection: 'row',
-        marginBottom: 10,
-        marginLeft: 10,
-        height: 40,
-        // backgroundColor: '#E5E5E5',
-        paddingLeft: 15,
-        backgroundColor: colors.white, 
-        // opacity: 0.7,
-        alignItems: 'center',
-        borderRadius: 12,
-    },
-    containerTodo2: {
-        backgroundColor: '#E5E5E5',
-        borderRadius: 12,
-        height: 40
-    },
-    checkbox: {
-        width: 27,
-        height: 27,
-        borderColor: colors.green,
-        borderWidth: 3,
-        borderRadius: 15,
-        alignItems: 'center',
-        justifyContent: 'center',
-        marginRight: 15
-    },
-    checkbox2: {
-        width: 28,
-        height: 28,
-        backgroundColor: colors.green,
-        borderWidth: 1
-    },
-    todo: {
-        color: colors.text,
-        fontSize: 20
-    },
-    todo2: {
-        textDecorationLine: 'line-through'
-    },
-    button: {
-        position: 'absolute',
-        bottom: 30,
-        alignSelf: 'center'
-    },
-    modal: {
-        width: 300,
-        alignSelf:'center',
-        backgroundColor: colors.white,
-        borderRadius: 40,
-        alignItems: 'center',
-        paddingVertical: 30
-    },
-    input: {
-        borderBottomWidth: 2,
-        borderColor: colors.gray,
-        color: colors.text,
-        width: 260,
-        fontSize: 18,
-        padding: 10,
-    },
-    button1: {
-        borderRadius: 12,
-        width: 200,
-        height: 48,
-        backgroundColor: colors.green,
-        alignItems: 'center',
-        justifyContent: 'center',
-
-    },
-    textButton: {
-        fontSize: 16,
-        color: colors.white,
-    },
-    viewDate: {
-        backgroundColor: colors.gray,
-        marginVertical: 30,
-        borderRadius: 5,
-        paddingHorizontal: 5,
-    },
-    textDate:{
-        fontSize: 24,
-        color: colors.text,
-    },
-    removeButton: {
-        backgroundColor: colors.red,
-        opacity: 0.8,
-        borderBottomEndRadius: 5,
-        borderTopEndRadius: 5 ,
-        borderTopLeftRadius: 12,
-        borderBottomLeftRadius: 12,
-        justifyContent: 'center',
-        height: 40,
-        width: 50,
-        position: 'relative',
-        left: 20
-    }
-});
